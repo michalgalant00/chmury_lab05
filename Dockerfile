@@ -6,36 +6,52 @@
 #   - Wersję aplikacji (w dowolnym schemacie)
 # 3. wersja aplikacji ma być określona w poleceniu docker build(..) poprzez nadanie wartości zmiennej VERSION definiowanej przez instrukcje ARG.
 
-FROM node:alpine as main
+FROM alpine:3.17 as builder
 
+# zdefiniowanie wersji aplikacji jako argumentu
 ARG VERSION
-ARG PORT
-ENV VERSION=${VERSION}, PORT=${PORT}
 
+# ustawienie wartości wersji aplikacji jako zmiennej środowiskowej
+ENV APP_VERSION=$VERSION
+
+# instalacja Nodejs i npm
+RUN apk add --update nodejs npm
+
+# utworzenie katalogu na aplikację
 WORKDIR /app
 
-COPY ./package.json ./ && ./index.js ./
+# skopiowanie plików aplikacji
+COPY index.js .
+COPY package.json .
 
-RUN npm install && npm install typescript && npm run build -- --prod --version=$VERSION
-# RUN npm install
+# zainstalowanie zależności
+RUN apk add --update nodejs npm &&\
+    npm install
 
-# EXPOSE ${PORT}
-# CMD [ "npm", "start" ]
+# dodanie instrukcji HEALTHCHECK
+HEALTHCHECK --interval=30s\
+    CMD wget --quiet --tries=1 --spider http://localhost:3000 || exit 1
+
+# ustawienie portu i komendy startowej
+EXPOSE 3000
+CMD ["node", "index.js"]
 
 # ETAP 2
-# 1. ma wykorzystywać obraz bazowy Nginx (w dowolnej wersji)
+# 1. ma wykorzystywać obraz bazowy Apache (w dowolnej wersji)
 # 2. aplikacja z etapu pierwszego ma zostać skopiowana na serwer HTTP i ustawiona, by być domyślnie uruchamiana i wyświetlana jako strona domyślna (startowa)
 # 3. ma być uwzględnione sprawdzanie poprawności działania (HEALTHCHECK)
 
-FROM nginx:latest
+FROM httpd:2.4.57
 
-COPY --from=main /app /usr/share/nginx/html
-RUN rm /etc/nginx/conf.d/default.conf
-COPY nginx.conf /etc/nginx/default.conf
+# skopiowanie gotowej aplikacji z pierwszego etapu do katalogu z plikami HTML
+COPY --from=builder /app /usr/local/apache2/htdocs/
 
-HEALTHCHECK --interval=10s --timeout=3s \
-    CMD curl -f http://localhost:${PORT}/ || exit 1
+# ustawienie pliku index.html jako domyślny
+RUN sed -i 's/DirectoryIndex index.html/DirectoryIndex index.html/g' /usr/local/apache2/conf/httpd.conf
 
-EXPOSE ${PORT}
+# dodanie instrukcji HEALTHCHECK
+HEALTHCHECK --interval=30s CMD wget --quiet --tries=1 --spider http://localhost:80/index.html || exit 1
 
-CMD [ "nginx", "-g", "daemon off;" ]
+# ustawienie portu i komendy startowej
+EXPOSE 80
+CMD ["httpd-foreground"]
