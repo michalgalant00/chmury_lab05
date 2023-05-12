@@ -8,50 +8,45 @@
 
 FROM alpine:3.17 as builder
 
-# zdefiniowanie wersji aplikacji jako argumentu
 ARG VERSION
 
-# ustawienie wartości wersji aplikacji jako zmiennej środowiskowej
-ENV APP_VERSION=$VERSION
+ENV APP_VERSION=${VERSION}
 
-# instalacja Nodejs i npm
-RUN apk add --update nodejs npm
+RUN apk update && \
+    apk upgrade && \
+    apk add --no-cache nodejs npm && \
+    rm -rf /etc/apk/cache
 
-# utworzenie katalogu na aplikację
-WORKDIR /app
+RUN npx create-react-app my-app
 
-# skopiowanie plików aplikacji
-COPY index.js .
-COPY package.json .
+WORKDIR /my-app
 
-# zainstalowanie zależności
-RUN apk add --update nodejs npm &&\
-    npm install
+COPY App.js ./src
 
-# dodanie instrukcji HEALTHCHECK
-HEALTHCHECK --interval=30s\
-    CMD wget --quiet --tries=1 --spider http://localhost:3000 || exit 1
+RUN npm install
+RUN npm run build
 
-# ustawienie portu i komendy startowej
+#test
 EXPOSE 3000
-CMD ["node", "index.js"]
+CMD [ "npm", "start" ]
+
 
 # ETAP 2
 # 1. ma wykorzystywać obraz bazowy Apache (w dowolnej wersji)
 # 2. aplikacja z etapu pierwszego ma zostać skopiowana na serwer HTTP i ustawiona, by być domyślnie uruchamiana i wyświetlana jako strona domyślna (startowa)
 # 3. ma być uwzględnione sprawdzanie poprawności działania (HEALTHCHECK)
 
-FROM httpd:2.4.57
+# FROM httpd:2.4.57
 
-# skopiowanie gotowej aplikacji z pierwszego etapu do katalogu z plikami HTML
-COPY --from=builder /app /usr/local/apache2/htdocs/
+# # skopiowanie gotowej aplikacji z pierwszego etapu do katalogu z plikami HTML
+# COPY --from=builder /app /usr/local/apache2/htdocs/
 
-# ustawienie pliku index.html jako domyślny
-RUN sed -i 's/DirectoryIndex index.html/DirectoryIndex index.html/g' /usr/local/apache2/conf/httpd.conf
+# # ustawienie pliku index.html jako domyślny
+# RUN sed -i 's/DirectoryIndex index.html/DirectoryIndex index.html/g' /usr/local/apache2/conf/httpd.conf
 
-# dodanie instrukcji HEALTHCHECK
-HEALTHCHECK --interval=30s CMD wget --quiet --tries=1 --spider http://localhost:80/index.html || exit 1
+# # dodanie instrukcji HEALTHCHECK
+# HEALTHCHECK --interval=30s CMD wget --quiet --tries=1 --spider http://localhost:80/index.html || exit 1
 
-# ustawienie portu i komendy startowej
-EXPOSE 80
-CMD ["httpd-foreground"]
+# # ustawienie portu i komendy startowej
+# EXPOSE 80
+# CMD ["httpd-foreground"]
