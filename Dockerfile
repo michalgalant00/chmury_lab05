@@ -6,22 +6,16 @@
 #   - Wersję aplikacji (w dowolnym schemacie)
 # 3. wersja aplikacji ma być określona w poleceniu docker build(..) poprzez nadanie wartości zmiennej VERSION definiowanej przez instrukcje ARG.
 
-FROM alpine:3.17 as builder
+FROM node:14-alpine as builder
 
-ARG VERSION
-
-ENV APP_VERSION=${VERSION}
-
-RUN apk update && \
-    apk upgrade && \
-    apk add --no-cache nodejs npm && \
-    rm -rf /etc/apk/cache
-
-RUN npx create-react-app my-app
+ARG APP_VERSION
+ENV APP_VERSION=${APP_VERSION}
 
 WORKDIR /my-app
 
-COPY App.js ./src
+COPY my-app/package* ./
+COPY my-app/src ./src
+COPY my-app/public ./public
 
 RUN npm install
 RUN npm run build
@@ -34,7 +28,10 @@ RUN npm run build
 # Stage 2 : wystawienie na apache
 FROM httpd:2.4-alpine
 
-COPY --from=build /my-app/build /usr/local/apache2/htdocs
+ARG APP_VERSION
+ENV APP_VERSION=${APP_VERSION}
+
+COPY --from=builder /my-app/build /usr/local/apache2/htdocs
 
 EXPOSE 80
 
