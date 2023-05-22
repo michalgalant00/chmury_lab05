@@ -6,16 +6,22 @@
 #   - Wersję aplikacji (w dowolnym schemacie)
 # 3. wersja aplikacji ma być określona w poleceniu docker build(..) poprzez nadanie wartości zmiennej VERSION definiowanej przez instrukcje ARG.
 
-FROM node:14-alpine as build
+FROM alpine:3.17 as builder
 
 ARG VERSION
+
 ENV APP_VERSION=${VERSION}
+
+RUN apk update && \
+    apk upgrade && \
+    apk add --no-cache nodejs npm && \
+    rm -rf /etc/apk/cache
+
+RUN npx create-react-app my-app
 
 WORKDIR /my-app
 
-COPY my-app/package* ./
-COPY my-app/src ./src
-COPY my-app/public ./public
+COPY App.js ./src
 
 RUN npm install
 RUN npm run build
@@ -25,14 +31,14 @@ RUN npm run build
 # 2. aplikacja z etapu pierwszego ma zostać skopiowana na serwer HTTP i ustawiona, by być domyślnie uruchamiana i wyświetlana jako strona domyślna (startowa)
 # 3. ma być uwzględnione sprawdzanie poprawności działania (HEALTHCHECK)
 
-FROM nginx:1.21.1-alpine
+# Stage 2 : wystawienie na apache
+FROM httpd:2.4-alpine
 
-COPY --from=build /my-app/build /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /my-app/build /usr/local/apache2/htdocs
 
 EXPOSE 80
 
-HEALTHCHECK --interval=10s --timeout=1s \
- CMD curl -f http://localhost:80/ || exit 1
+HEALTHCHECK --interval=10s --timeout=1s\
+    CMD curl -f http://localhost:80/ || exit 1
 
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["httpd", "-D", "FOREGROUND"]
