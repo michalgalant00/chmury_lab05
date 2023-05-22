@@ -1,7 +1,9 @@
 import "./App.css";
+// przypisanie wartości zmiennej środowiskowej do zmiennej w aplikacji
 export const ver = process.env.APP_VERSION;
 
 function App() {
+  // jeżeli adresem ip będzie http://localhost to zamień go na 127.0.0.1
   const origin = window.location.origin;
   const address = origin == "http://localhost" ? "127.0.0.1" : origin;
 
